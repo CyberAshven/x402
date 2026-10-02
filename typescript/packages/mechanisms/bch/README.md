@@ -1,5 +1,9 @@
 # `@x402/bch`
 
+This package is distributed as ESM because its Libauth dependency is ESM-only
+and initializes with top-level await. Use `import` or dynamic `import()` from
+Node.js and bundlers; CommonJS `require()` is not supported.
+
 Bitcoin Cash support for x402 v2 `exact` payments. BCH payments carry a
 complete, client-signed transaction rather than an account authorization.
 
