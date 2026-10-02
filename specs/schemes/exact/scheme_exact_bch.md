@@ -25,8 +25,8 @@ The supported network identifiers are:
 `payTo` MUST be a fully prefixed, lowercase CashAddr whose prefix matches
 `network` and whose type is P2PKH, P2SH20, or P2SH32. A CashToken payment MUST
 use a token-aware CashAddr. An implementation MAY also accept a legacy
-Base58Check P2PKH or P2SH20 address for a native BCH payment; such
-requirements are not portable between implementations.
+Base58Check P2PKH or P2SH20 address for a native BCH payment. The TypeScript
+and Rust mechanisms both do.
 
 `asset` MUST be `BCH` for a native payment, or the 32-byte CashToken category
 as 64 lowercase hexadecimal characters for a CashToken payment. `amount` MUST
@@ -136,7 +136,8 @@ choice. Inputs MAY come from more than one key; the reported payer is the key
 of the first P2PKH input.
 
 Inputs MAY use any locking script, including P2SH20 and P2SH32 contracts. A
-facilitator MUST verify P2PKH inputs, signature included. For other inputs it
+facilitator MUST verify P2PKH inputs, signature included, whether it is ECDSA or
+BCH Schnorr. For other inputs it
 MUST at least require push-only unlocking bytecode and, for P2SH20 and P2SH32,
 the redeem script the source output commits to. The TypeScript mechanism runs
 every input script in the Libauth 2026 VM before broadcast. The Rust mechanism
@@ -260,7 +261,7 @@ policy, fee/change policy, provider evidence, and settlement idempotency.
 | Fungible CashTokens | Supported | The merchant output carries the requested category and amount; any remainder returns as token change. |
 | CashToken NFTs | Supported | `none`, `mutable`, and `minting` capabilities; commitments of 0 to 128 bytes; NFT-only payments use amount `0`. |
 | P2PKH, P2SH20, P2SH32 destinations | Supported | `payTo` may be any of these. CashScript contracts are paid by their compiled locking script. |
-| P2PKH inputs | Supported | BCH `SIGHASH_ALL | SIGHASH_FORKID` ECDSA spends. |
+| P2PKH inputs | Supported | BCH `SIGHASH_ALL | SIGHASH_FORKID` spends signed with ECDSA or BCH Schnorr. |
 | P2SH20/P2SH32 and other script inputs | Supported | The TypeScript facilitator runs them in the Libauth 2026 VM before broadcast. The Rust facilitator checks the unlocking bytecode and redeem-script hash, then runs the script through a configured node's `testmempoolaccept`, or leaves it to the network at broadcast. |
 | Covenant successor rules, multisig signer-set policy | Unsupported | Contract inputs are spent under their own scripts; x402 adds no successor or signer-set policy. |
 | PSBT or partially signed transport | Unsupported | The payload must contain a complete legacy raw transaction. |
