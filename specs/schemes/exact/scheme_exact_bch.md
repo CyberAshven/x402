@@ -135,11 +135,14 @@ every CashToken is conserved. The payer signs every output with
 choice. Inputs MAY come from more than one key; the reported payer is the key
 of the first P2PKH input.
 
-Every facilitator MUST accept P2PKH inputs. A facilitator MAY accept other
-input scripts that pass BCH VM validation against their authoritative source
-outputs. The TypeScript mechanism validates them with the Libauth 2026 VM. The
-Rust mechanism has no script VM and rejects them, so a client that needs every
-facilitator to accept its payment MUST spend P2PKH inputs only.
+Inputs MAY use any locking script, including P2SH20 and P2SH32 contracts. A
+facilitator MUST verify P2PKH inputs, signature included. For other inputs it
+MUST at least require push-only unlocking bytecode and, for P2SH20 and P2SH32,
+the redeem script the source output commits to. The TypeScript mechanism runs
+every input script in the Libauth 2026 VM before broadcast. The Rust mechanism
+has no script VM and leaves script execution to the network: an invalid script
+makes the broadcast, and therefore settlement, fail, so the protected resource
+never runs.
 
 ## Verification and settlement
 
@@ -238,7 +241,7 @@ policy, fee/change policy, provider evidence, and settlement idempotency.
 | `verify` | Read-only transaction/source validation | Verification checks current outpoint state and may become stale before broadcast. It is not a reservation. |
 | `settle` | Claim TXID, broadcast, observe evidence | The facilitator may submit a client-signed transaction but cannot repair, top up, or replace it without a new client authorization. |
 | `transaction` in `SettleResponse` | BCH TXID | A successful response identifies the transaction; a pending response must be reconciled rather than blindly retried. |
-| `payer` | P2PKH CashAddr of the first P2PKH input | Inputs may come from more than one key; the first P2PKH input identifies the payer. |
+| `payer` | CashAddr of the first P2PKH input, or of the first input's script | Inputs may come from more than one key or contract; the first P2PKH input identifies the payer when there is one. |
 
 ### Functional support matrix
 
@@ -257,8 +260,8 @@ policy, fee/change policy, provider evidence, and settlement idempotency.
 | CashToken NFTs | Supported | `none`, `mutable`, and `minting` capabilities; commitments of 0 to 128 bytes; NFT-only payments use amount `0`. |
 | P2PKH, P2SH20, P2SH32 destinations | Supported | `payTo` may be any of these. CashScript contracts are paid by their compiled locking script. |
 | P2PKH inputs | Supported | BCH `SIGHASH_ALL | SIGHASH_FORKID` ECDSA spends. |
-| P2SH20/P2SH32 inputs | TypeScript only | The TypeScript facilitator validates them with the Libauth 2026 VM. The Rust facilitator has no script VM and rejects them. |
-| CashScript covenant execution, multisig signer sets | Unsupported | No covenant successor or signer-set policy is defined. |
+| P2SH20/P2SH32 and other script inputs | Supported | The TypeScript facilitator runs them in the Libauth 2026 VM before broadcast. The Rust facilitator checks the unlocking bytecode and redeem-script hash, and the network runs the script at broadcast. |
+| Covenant successor rules, multisig signer-set policy | Unsupported | Contract inputs are spent under their own scripts; x402 adds no successor or signer-set policy. |
 | PSBT or partially signed transport | Unsupported | The payload must contain a complete legacy raw transaction. |
 | Fee sponsorship | Unsupported | The payer supplies all inputs and pays the fee; there is no facilitator fee input or sponsor authorization. |
 | Multiple inputs | Supported with restrictions | Inputs are allowed up to policy limits and may come from more than one key. Every source must be unspent at verification. |
@@ -321,8 +324,9 @@ The current implementation deliberately leaves these gaps for follow-up work:
   wallet-backed path. The TypeScript and Rust mechanisms advertise the same
   `extra.value`, accept each other's transactions, and build identical bytes
   for them. Separate wallet-shape vectors cover OP_RETURN data, extra outputs,
-  a second payer, unrelated CashTokens, and the rejected cases: token burn and
-  mint, an NFT capability change, a second merchant output, dust, and 17
-  outputs. Both facilitators reach the same verdict on each. Malformed-source, mempool-race, reorg, and provider disagreement
+  a second payer, unrelated CashTokens, P2SH inputs, and the rejected cases:
+  token burn and mint, an NFT capability change, a second merchant output,
+  dust, 17 outputs, and malformed P2SH unlocking bytecode. Both facilitators
+  reach the same verdict on each. Malformed-source, mempool-race, reorg, and provider disagreement
   scenarios still need cross-language vectors before claiming production
   maturity.
