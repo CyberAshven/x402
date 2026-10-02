@@ -125,24 +125,21 @@ based on the complete serialized transaction size. CashToken state MUST be
 conserved across all inputs and outputs. An exact payment does not authorize
 token genesis, minting, burning, or a change of NFT capability.
 
-### Interoperable transaction shape
+### Inputs and additional outputs
 
-Facilitators differ in how much additional structure they accept. Every
-facilitator MUST accept, and every client SHOULD produce, this shape:
+A wallet MAY add outputs beyond the merchant output, up to the facilitator's
+output limit, which defaults to 16 outputs in total. They may carry OP_RETURN
+data, BCH change to any locking script, and unrelated CashTokens, as long as
+every CashToken is conserved. The payer signs every output with
+`SIGHASH_ALL | SIGHASH_FORKID`, so where the remainder goes is the payer's
+choice. Inputs MAY come from more than one key; the reported payer is the key
+of the first P2PKH input.
 
-- standard P2PKH inputs with valid ECDSA signatures, all from the same payer
-  public-key hash;
-- the merchant output; and
-- zero or one change output that pays the payer's P2PKH script, is not dust,
-  and carries the exact CashToken remainder when there is one.
-
-A facilitator MAY additionally accept other input scripts that pass BCH VM
-validation against their authoritative source outputs, additional wallet or
-application outputs up to its policy limit, OP_RETURN outputs, and unrelated
-token categories that are conserved. A client that produces such a
-transaction cannot rely on every facilitator accepting it. The TypeScript
-mechanism accepts this wider set with a default limit of 16 outputs. The Rust
-mechanism accepts the interoperable shape only.
+Every facilitator MUST accept P2PKH inputs. A facilitator MAY accept other
+input scripts that pass BCH VM validation against their authoritative source
+outputs. The TypeScript mechanism validates them with the Libauth 2026 VM. The
+Rust mechanism has no script VM and rejects them, so a client that needs every
+facilitator to accept its payment MUST spend P2PKH inputs only.
 
 ## Verification and settlement
 
@@ -241,7 +238,7 @@ policy, fee/change policy, provider evidence, and settlement idempotency.
 | `verify` | Read-only transaction/source validation | Verification checks current outpoint state and may become stale before broadcast. It is not a reservation. |
 | `settle` | Claim TXID, broadcast, observe evidence | The facilitator may submit a client-signed transaction but cannot repair, top up, or replace it without a new client authorization. |
 | `transaction` in `SettleResponse` | BCH TXID | A successful response identifies the transaction; a pending response must be reconciled rather than blindly retried. |
-| `payer` | P2PKH CashAddr derived from the signing public key | In the interoperable shape, a transaction with inputs from multiple payer keys is rejected. |
+| `payer` | P2PKH CashAddr of the first P2PKH input | Inputs may come from more than one key; the first P2PKH input identifies the payer. |
 
 ### Functional support matrix
 
@@ -260,12 +257,12 @@ policy, fee/change policy, provider evidence, and settlement idempotency.
 | CashToken NFTs | Supported | `none`, `mutable`, and `minting` capabilities; commitments of 0 to 128 bytes; NFT-only payments use amount `0`. |
 | P2PKH, P2SH20, P2SH32 destinations | Supported | `payTo` may be any of these. CashScript contracts are paid by their compiled locking script. |
 | P2PKH inputs | Supported | BCH `SIGHASH_ALL | SIGHASH_FORKID` ECDSA spends. |
-| P2SH20/P2SH32 inputs | TypeScript only | The TypeScript facilitator validates them with the Libauth 2026 VM. They are outside the interoperable shape. |
+| P2SH20/P2SH32 inputs | TypeScript only | The TypeScript facilitator validates them with the Libauth 2026 VM. The Rust facilitator has no script VM and rejects them. |
 | CashScript covenant execution, multisig signer sets | Unsupported | No covenant successor or signer-set policy is defined. |
 | PSBT or partially signed transport | Unsupported | The payload must contain a complete legacy raw transaction. |
 | Fee sponsorship | Unsupported | The payer supplies all inputs and pays the fee; there is no facilitator fee input or sponsor authorization. |
-| Multiple inputs | Supported with restrictions | Inputs are allowed up to policy limits. In the interoperable shape every input resolves to the same payer key, and every source must be unspent at verification. |
-| Change | Supported with restrictions | The interoperable shape allows one non-dust P2PKH change output to the payer. The TypeScript facilitator also accepts additional outputs up to its policy limit. |
+| Multiple inputs | Supported with restrictions | Inputs are allowed up to policy limits and may come from more than one key. Every source must be unspent at verification. |
+| Change and other outputs | Supported with restrictions | Wallets may add change, OP_RETURN, and other outputs up to the output limit (16 by default). No output may be dust, and only the merchant output may pay the merchant script. |
 | Confirmation settlement | Supported | Configurable confirmation count; default is one confirmation. |
 | Mempool settlement | Supported as opt-in | Accepts mempool/confirmed observation without waiting for a confirmation. This is weaker finality. |
 | Double-spend-proof settlement | Supported as opt-in | Requires provider support for proof observation; absence of a proof is not confirmation. |
@@ -289,9 +286,8 @@ obligations:
 4. Enforce conservation: source value equals the sum of outputs plus fee, and
    CashToken state is unchanged. Fee policy is part of validation because BCH
    has no contract call that separately records the intended fee.
-5. Enforce the output policy. In the interoperable shape the remainder returns
-   to the payer; sending it to an arbitrary address would turn a payment into
-   an unreviewed multi-recipient transfer.
+5. Enforce the output policy: exactly one merchant output, no second output to
+   the merchant script, no dust, and the output limit.
 6. Claim the TXID against the x402 resource and requirements before broadcast.
    This is an application-level idempotency guard; it does not reserve the
    inputs on the BCH network.
@@ -324,6 +320,9 @@ The current implementation deliberately leaves these gaps for follow-up work:
   bytes, fungible plus NFT payments, all three destination types, and the
   wallet-backed path. The TypeScript and Rust mechanisms advertise the same
   `extra.value`, accept each other's transactions, and build identical bytes
-  for them. Malformed-source, mempool-race, reorg, and provider disagreement
+  for them. Separate wallet-shape vectors cover OP_RETURN data, extra outputs,
+  a second payer, unrelated CashTokens, and the rejected cases: token burn and
+  mint, an NFT capability change, a second merchant output, dust, and 17
+  outputs. Both facilitators reach the same verdict on each. Malformed-source, mempool-race, reorg, and provider disagreement
   scenarios still need cross-language vectors before claiming production
   maturity.
