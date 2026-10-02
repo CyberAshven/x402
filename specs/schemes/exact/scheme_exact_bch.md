@@ -140,9 +140,10 @@ facilitator MUST verify P2PKH inputs, signature included. For other inputs it
 MUST at least require push-only unlocking bytecode and, for P2SH20 and P2SH32,
 the redeem script the source output commits to. The TypeScript mechanism runs
 every input script in the Libauth 2026 VM before broadcast. The Rust mechanism
-has no script VM and leaves script execution to the network: an invalid script
-makes the broadcast, and therefore settlement, fail, so the protected resource
-never runs.
+has no script VM. With a configured BCH node it runs those scripts through the
+node's `testmempoolaccept` before verification succeeds. Without one it leaves
+them to the network: an invalid script makes the broadcast, and therefore
+settlement, fail, so the protected resource never runs.
 
 ## Verification and settlement
 
@@ -260,7 +261,7 @@ policy, fee/change policy, provider evidence, and settlement idempotency.
 | CashToken NFTs | Supported | `none`, `mutable`, and `minting` capabilities; commitments of 0 to 128 bytes; NFT-only payments use amount `0`. |
 | P2PKH, P2SH20, P2SH32 destinations | Supported | `payTo` may be any of these. CashScript contracts are paid by their compiled locking script. |
 | P2PKH inputs | Supported | BCH `SIGHASH_ALL | SIGHASH_FORKID` ECDSA spends. |
-| P2SH20/P2SH32 and other script inputs | Supported | The TypeScript facilitator runs them in the Libauth 2026 VM before broadcast. The Rust facilitator checks the unlocking bytecode and redeem-script hash, and the network runs the script at broadcast. |
+| P2SH20/P2SH32 and other script inputs | Supported | The TypeScript facilitator runs them in the Libauth 2026 VM before broadcast. The Rust facilitator checks the unlocking bytecode and redeem-script hash, then runs the script through a configured node's `testmempoolaccept`, or leaves it to the network at broadcast. |
 | Covenant successor rules, multisig signer-set policy | Unsupported | Contract inputs are spent under their own scripts; x402 adds no successor or signer-set policy. |
 | PSBT or partially signed transport | Unsupported | The payload must contain a complete legacy raw transaction. |
 | Fee sponsorship | Unsupported | The payer supplies all inputs and pays the fee; there is no facilitator fee input or sponsor authorization. |
